@@ -1,0 +1,123 @@
+---
+# Source: concourse/templates/web-deployment.yaml
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: release-name-web
+  labels:
+    app: release-name-web
+    chart: "concourse-6.2.1"
+    release: "release-name"
+    heritage: "Tiller"
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: release-name-web
+        release: "release-name"
+    spec:
+      serviceAccountName: release-name-web
+      containers:
+        - name: release-name-web
+          image: "concourse/concourse:5.2.0"
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - web
+          env:
+            - name: CONCOURSE_ENABLE_GLOBAL_RESOURCES
+              value: "true"
+            - name: CONCOURSE_BIND_PORT
+              value: "80"
+            - name: CONCOURSE_ADD_LOCAL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: release-name-web
+                  key: local-users
+            - name: CONCOURSE_EXTERNAL_URL
+              value: "http://concourse.nginx.haas-419.pez.pivotal.io:30023"
+            - name: CONCOURSE_DEBUG_BIND_PORT
+              value: "8079"
+            - name: CONCOURSE_POSTGRES_HOST
+              value: release-name-postgresql
+            - name: CONCOURSE_POSTGRES_USER
+              value: "concourse"
+            - name: CONCOURSE_POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: release-name-postgresql
+                  key: postgres-password
+            - name: CONCOURSE_POSTGRES_DATABASE
+              value: "concourse"
+            - name: CONCOURSE_KUBERNETES_IN_CLUSTER
+              value: "true"
+            - name: CONCOURSE_KUBERNETES_NAMESPACE_PREFIX
+              value: release-name-
+            - name: CONCOURSE_SESSION_SIGNING_KEY
+              value: "/concourse-keys/session_signing_key"
+            - name: CONCOURSE_MAIN_TEAM_LOCAL_USER
+              value: "test"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: CONCOURSE_PEER_ADDRESS
+              value: "$(POD_IP)"
+            - name: CONCOURSE_TSA_BIND_PORT
+              value: "2222"
+            - name: CONCOURSE_TSA_DEBUG_BIND_PORT
+              value: "2221"
+            - name: CONCOURSE_TSA_HOST_KEY
+              value: "/concourse-keys/host_key"
+            - name: CONCOURSE_TSA_AUTHORIZED_KEYS
+              value: "/concourse-keys/worker_key.pub"
+          ports:
+            - name: atc
+              containerPort: 80
+            - name: tsa
+              containerPort: 2222
+            - name: atc-debug
+              containerPort: 8079
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /api/v1/info
+              port: atc
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+            
+          readinessProbe:
+            httpGet:
+              path: /api/v1/info
+              port: atc
+            
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            
+          volumeMounts:
+            - name: concourse-keys
+              mountPath: "/concourse-keys"
+              readOnly: true
+            - name: auth-keys
+              mountPath: "/concourse-auth"
+              readOnly: true
+      volumes:
+        - name: concourse-keys
+          secret:
+            secretName: release-name-web
+            defaultMode: 0400
+            items:
+              - key: host-key
+                path: host_key
+              - key: session-signing-key
+                path: session_signing_key
+              - key: worker-key-pub
+                path: worker_key.pub
+        - name: auth-keys
+          secret:
+            secretName: release-name-web
+            defaultMode: 0400
+            items:

@@ -1,0 +1,17 @@
+---
+# Source: concourse/templates/worker-prestop-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: release-name-worker
+  labels:
+    app: release-name-worker
+    chart: "concourse-6.2.1"
+    release: "release-name"
+    heritage: "Tiller"
+data:
+  pre-stop-hook.sh: |
+    #!/bin/bash
+    kill -s SIGUSR2 1
+    while [ -e /proc/1 ]; do sleep 1; done
+

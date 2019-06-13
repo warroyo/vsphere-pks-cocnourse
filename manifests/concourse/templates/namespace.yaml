@@ -1,0 +1,15 @@
+---
+# Source: concourse/templates/namespace.yaml
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  annotations:
+    "helm.sh/resource-policy": keep
+  name: release-name-main
+  labels:
+    app: release-name-web
+    chart: "concourse-6.2.1"
+    release: "release-name"
+    heritage: "Tiller"

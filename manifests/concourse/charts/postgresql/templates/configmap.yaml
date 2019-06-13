@@ -1,0 +1,12 @@
+---
+# Source: concourse/charts/postgresql/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: release-name-postgresql
+  labels:
+    app: postgresql
+    chart: postgresql-0.13.1
+    release: release-name
+    heritage: Tiller
+data:

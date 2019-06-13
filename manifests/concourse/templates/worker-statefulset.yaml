@@ -1,0 +1,139 @@
+---
+# Source: concourse/templates/worker-statefulset.yaml
+apiVersion: apps/v1beta1
+kind: StatefulSet
+metadata:
+  name: release-name-worker
+  labels:
+    app: release-name-worker
+    chart: "concourse-6.2.1"
+    release: "release-name"
+    heritage: "Tiller"
+spec:
+  serviceName: release-name-worker
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: release-name-worker
+        release: "release-name"
+    spec:
+      serviceAccountName: release-name-worker
+      terminationGracePeriodSeconds: 60
+      initContainers:
+        - name: release-name-worker-init-rm
+          image: "concourse/concourse:5.2.0"
+          imagePullPolicy: "IfNotPresent"
+          command:
+            - /bin/sh
+          args:
+            - -ce
+            - |-
+              rm -rf /concourse-work-dir/*
+          volumeMounts:
+            - name: concourse-work-dir
+              mountPath: "/concourse-work-dir"
+      containers:
+        - name: release-name-worker
+          image: "concourse/concourse:5.2.0"
+          imagePullPolicy: "IfNotPresent"
+          args:
+            - worker
+          livenessProbe:
+            failureThreshold: 5
+            httpGet:
+              path: /
+              port: worker-hc
+            initialDelaySeconds: 10
+            periodSeconds: 15
+            timeoutSeconds: 3
+            
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - "/bin/bash"
+                  - "/pre-stop-hook.sh"
+          env:
+            - name: CONCOURSE_HEALTHCHECK_BIND_PORT
+              value: "8888"
+            - name: CONCOURSE_DEBUG_BIND_PORT
+              value: "7776"
+            - name: CONCOURSE_WORK_DIR
+              value: "/concourse-work-dir"
+            - name: CONCOURSE_BIND_PORT
+              value: "7777"
+            
+            - name: CONCOURSE_TSA_HOST
+              value: "release-name-web:2222"
+            
+            - name: CONCOURSE_TSA_PUBLIC_KEY
+              value: "/concourse-keys/host_key.pub"
+            - name: CONCOURSE_TSA_WORKER_PRIVATE_KEY
+              value: "/concourse-keys/worker_key"
+            - name: CONCOURSE_BAGGAGECLAIM_BIND_PORT
+              value: "7788"
+            - name: CONCOURSE_BAGGAGECLAIM_DEBUG_BIND_PORT
+              value: "7787"
+            - name: CONCOURSE_BAGGAGECLAIM_DRIVER
+              value: "btrfs"
+            - name: CONCOURSE_VOLUME_SWEEPER_MAX_IN_FLIGHT
+              value: "5"
+            - name: CONCOURSE_CONTAINER_SWEEPER_MAX_IN_FLIGHT
+              value: "5"
+          ports:
+            - name: worker-hc
+              containerPort: 8888
+          resources:
+            requests:
+              cpu: 100m
+              memory: 512Mi
+            
+          securityContext:
+            privileged: true
+          volumeMounts:
+            - name: concourse-keys
+              mountPath: "/concourse-keys"
+              readOnly: true
+            - name: concourse-work-dir
+              mountPath: "/concourse-work-dir"
+            - name: pre-stop-hook
+              mountPath: /pre-stop-hook.sh
+              subPath: pre-stop-hook.sh
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app: release-name-worker
+                  release: "release-name"
+      volumes:
+        - name: pre-stop-hook
+          configMap:
+            name: release-name-worker
+        - name: concourse-keys
+          secret:
+            secretName: release-name-worker
+            defaultMode: 0400
+            items:
+              - key: host-key-pub
+                path: host_key.pub
+              - key: worker-key
+                path: worker_key
+              - key: worker-key-pub
+                path: worker_key.pub
+  volumeClaimTemplates:
+    - metadata:
+        name: concourse-work-dir
+      spec:
+        accessModes:
+          - "ReadWriteOnce"
+        resources:
+          requests:
+            storage: "20Gi"
+  updateStrategy:
+    type: RollingUpdate
+  podManagementPolicy: Parallel
